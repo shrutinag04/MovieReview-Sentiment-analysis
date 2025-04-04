@@ -1,0 +1,5 @@
+google-generativeai
+streamlit
+google-api-core
+protobuf  # google-generativeai might depend on this
+grpcio    # google-generativeai might depend on this
