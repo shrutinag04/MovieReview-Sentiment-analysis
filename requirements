@@ -1,4 +1,4 @@
-google-generativeai==1.7.0
+google-genai
 streamlit
 google-api-core
 protobuf
