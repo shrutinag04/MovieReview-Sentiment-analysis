@@ -1,22 +1,22 @@
 import streamlit as st
-from google import genai
-from google.genai import types
+import google.generativeai as genai
+from google.generativeai.types import GenerationConfig
 import os
 import enum
 from google.api_core import retry
 
-# --- Configure Retry ---
+# --- Configure Retry Logic ---
 is_retriable = lambda e: (isinstance(e, genai.errors.APIError) and e.code in {429, 503})
-genai.models.Models.generate_content = retry.Retry(predicate=is_retriable)(genai.models.Models.generate_content)
+genai.GenerativeModel.generate_content = retry.Retry(predicate=is_retriable)(genai.GenerativeModel.generate_content)
 
 # --- Set up Google GenAI ---
 key = st.secrets.get("GOOGLE_API_KEY")
 if not key:
     st.error("Please set the GOOGLE_API_KEY in Streamlit secrets.")
     st.stop()
-client = genai.Client(api_key=key)
-#genai.configure(api_key=key)
-#client = genai.GenerativeModel('gemini-2.0-flash')
+
+genai.configure(api_key=key)
+model = genai.GenerativeModel('gemini-2.0-flash')
 
 # --- Define Sentiment Enum ---
 class Sentiment(enum.Enum):
@@ -24,33 +24,37 @@ class Sentiment(enum.Enum):
     NEUTRAL = "neutral"
     NEGATIVE = "negative"
 
-# --- Streamlit App ---
-st.title("Movie Review Sentiment Classifier")
+# --- Streamlit App UI ---
+st.title("🎬 Movie Review Sentiment Classifier")
 
-review_text = st.text_area("Enter a movie review:", "Her is a disturbing study revealing the direction humanity is headed if AI is allowed to keep evolving, unchecked. I wish there were more movies like this masterpiece.")
+review_text = st.text_area("Enter a movie review:", 
+    "Her is a disturbing study revealing the direction humanity is headed if AI is allowed to keep evolving, unchecked. I wish there were more movies like this masterpiece."
+)
 
 if st.button("Classify Sentiment"):
     if review_text:
         zero_shot_prompt = f"""Classify movie reviews as POSITIVE, NEUTRAL or NEGATIVE.
 Review: "{review_text}"
-Sentiment: """
+Sentiment:"""
 
         try:
-            response = client.models.generate_content(
-                model='gemini-2.0-flash',
-                config=types.GenerateContentConfig(
-                    response_mime_type="text/x.enum",
-                    response_schema=Sentiment
-                ),
-                contents=zero_shot_prompt
+            response = model.generate_content(
+                contents=zero_shot_prompt,
+                generation_config=GenerationConfig(
+                    temperature=0.3  # More consistent output
+                )
             )
 
-            
-            enum_response=response.parsed
-            if response.parsed in Sentiment:
-                    st.subheader("Sentiment:")
-                    st.write(f"The sentiment of the review is: **{response.parsed.name}**") # Use the enum member's name
+            sentiment_text = response.text.strip().upper()
+            # Normalize and check match
+            if sentiment_text in Sentiment.__members__:
+                sentiment = Sentiment[sentiment_text]
+                st.subheader("Sentiment:")
+                st.write(f"The sentiment of the review is: **{sentiment.name}**")
+            else:
+                st.warning(f"🤔 Unexpected response: {sentiment_text}")
+
         except Exception as e:
-            st.error(f"An error occurred: {e}")
+            st.error(f"❌ An error occurred: {e}")
     else:
-        st.warning("Please enter a movie review.")
+        st.warning("⚠️ Please enter a movie review.")
